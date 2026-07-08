@@ -38,7 +38,7 @@ The answer in the case of the Apple ][ is "I have no idea" because I don't actua
 
 Update: Someone has now tested things with an Apple ][ and unfortunately it doesn't work. But I'm going to try and fix this as soon as I can!
 
-Up until today (5/17/2026), ESProFile didn't work with the Apple /// at all, but now it's at least partially working! Thanks to me not sending parity at certain points in the transaction and also not sending read data on the correct clock edge, the Apple /// would refuse to make it very far in communications at all. But I've fixed those issues, and read operations now work fine on the Apple ///. This means that if you have a premade Apple /// disk image and you just want to boot off it without modifying any files, then it'll probably work just fine. However, writes do NOT yet work; the Apple /// aborts any write operation at the very, very end of the transaction. I still need to figure out why, but don't have time right now.
+I've been able to get ESProFile working with the Apple ///, at least for disk read operations, but doing this broke compatibility with LisaFPGA at higher overclock speeds, so I've reverted back to the original way that's not compatible with the ///.
 
 # Building One
 With all that out of the way, let's talk about how to actually build an ESProFile!
@@ -583,3 +583,5 @@ Feel free to email me at [alexelectronicsguy@gmail.com](mailto:alexelectronicsgu
 4/19/2026 - Switched to using a header file for pin definitions instead of defining them in the source files themselves. This way, it's easy for people to make custom boards with different pin assignments. And it also means that I was able to add support (in the form of a header file) for the onboard LisaFPGA version of ESProFile in this release! Also cached the emulator read/write routines to make them fast enough for LisaFPGA's 75MHz DOTCK mode.
 
 5/17/2026 - Released ESProFile emulator firmware version 1.5, which adds support for read operations on the Apple ///. No write support just yet. Also released ESProFile diagnostic firmware version 1.2, which fixes some infinite timeout bugs in and improves the reliability of backup and restore operations by retrying reads/writes multiple times in case of failure to maximize the chance of getting good data on/off the disk. Also fixed a minor issue where the code incorrectly selects the LisaFPGA pin definitions as opposed to the standalone ESProFile definitions by default.
+
+7/8/2026 - Reverted ESProFile emulator firmware back to the 4/19/2026 v1.4 version; the Apple /// compatibility added in v1.5 broke LisaFPGA when overclocked to max speed. The diagnostic firmware v1.2 upgrades were NOT reverted.

@@ -9,9 +9,8 @@
 // 2/22/2025 - v1.2 - Improved performance by about 30% (including during Selector copy operations) by making some tweaks to the SPI initialization routines, copy buffer size, and inlining some functions.
 // 11/14/2025 - v1.3 - Fixed a bug where ESProFile wouldn't respond in time to satisfy the super-short timeout period of Rev. C and earlier Lisa boot ROMs, as well as a bug where a botched LOS 1.0 shutdown under the Rev. C ROMs would lead to an Error 85 on the next boot attempt.
 // 4/19/2026 - v1.4 - Added support for pin definition header files to allow easy customization of ESProFile for different board layouts, and used this to create the LisaFPGA variant of ESProFile. Also cached the ProFile read/write routines to make them fast enough for LisaFPGA's 75MHz DOTCK mode.
-// 5/17/2026 - v1.5 - Added partial Apple /// compatibility; reads work, but writes don't.
 
-#define EMULATOR_VERSION "1.5" // The version of the ESProFile emulator software; this gets printed over serial at startup
+#define EMULATOR_VERSION "1.4" // The version of the ESProFile emulator software; this gets printed over serial at startup
 
 #define readStatusOffset 4 // Status bytes are bytes 0-3 of blockData during a read
 #define writeStatusOffset 532 // And bytes 532-535 during a write
@@ -158,7 +157,7 @@ void emulatorLoop() {
 IRAM_ATTR void sendMultiData() {
   while(bitRead(REG_READ(CMD_IN_REG), CMDPin) == 1 && bitRead(REG_READ(PRES_IN_REG), PRESPin) == 1){ // Stay in the data-sending loop until the host lowers CMD or the drive is reset
     currentState = bitRead(REG_READ(STRB_IN_REG), STRBPin); // Read the current state of STRB
-    if(currentState == 1 and prevState == 0){ // If we see a rising edge on STRB, send the next byte
+    if(currentState == 0 and prevState == 1){ // If we see a falling edge on STRB, send the next byte
       sendParity(blockData[bufferIndex]); // Send the parity for the byte
       REG_WRITE(BUS_W1TS_REG, blockData[bufferIndex] << busOffset); // Then write the byte into W1TS to set all the bits that need to be set
       REG_WRITE(BUS_W1TC_REG, ((byte)~blockData[bufferIndex++] << busOffset)); // Then write the inverse of the byte into W1TC to clear all the bits that need to be cleared, and increment the buffer index
