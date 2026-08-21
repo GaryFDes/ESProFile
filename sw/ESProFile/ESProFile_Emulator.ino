@@ -1,5 +1,5 @@
 //***********************************************************************************
-//* ESProFile ProFile Emulator Software v1.4                                        *
+//* ESProFile ProFile Emulator Software v1.5                                        *
 //* By: Alex Anderson-McLeod                                                        *
 //* Email address: alexelectronicsguy@gmail.com                                     *
 //***********************************************************************************
@@ -9,8 +9,9 @@
 // 2/22/2025 - v1.2 - Improved performance by about 30% (including during Selector copy operations) by making some tweaks to the SPI initialization routines, copy buffer size, and inlining some functions.
 // 11/14/2025 - v1.3 - Fixed a bug where ESProFile wouldn't respond in time to satisfy the super-short timeout period of Rev. C and earlier Lisa boot ROMs, as well as a bug where a botched LOS 1.0 shutdown under the Rev. C ROMs would lead to an Error 85 on the next boot attempt.
 // 4/19/2026 - v1.4 - Added support for pin definition header files to allow easy customization of ESProFile for different board layouts, and used this to create the LisaFPGA variant of ESProFile. Also cached the ProFile read/write routines to make them fast enough for LisaFPGA's 75MHz DOTCK mode.
+// 8/21/2026 - v1.5 - Improved SD card access speeds by a factor of about 5 on average with the DUSE_SPI_ARRAY_TRANSFER build option.
 
-#define EMULATOR_VERSION "1.4" // The version of the ESProFile emulator software; this gets printed over serial at startup
+#define EMULATOR_VERSION "1.5" // The version of the ESProFile emulator software; this gets printed over serial at startup
 
 #define readStatusOffset 4 // Status bytes are bytes 0-3 of blockData during a read
 #define writeStatusOffset 532 // And bytes 532-535 during a write

@@ -585,3 +585,5 @@ Feel free to email me at [alexelectronicsguy@gmail.com](mailto:alexelectronicsgu
 5/17/2026 - Released ESProFile emulator firmware version 1.5, which adds support for read operations on the Apple ///. No write support just yet. Also released ESProFile diagnostic firmware version 1.2, which fixes some infinite timeout bugs in and improves the reliability of backup and restore operations by retrying reads/writes multiple times in case of failure to maximize the chance of getting good data on/off the disk. Also fixed a minor issue where the code incorrectly selects the LisaFPGA pin definitions as opposed to the standalone ESProFile definitions by default.
 
 7/8/2026 - Reverted ESProFile emulator firmware back to the 4/19/2026 v1.4 version; the Apple /// compatibility added in v1.5 broke LisaFPGA when overclocked to max speed. The diagnostic firmware v1.2 upgrades were NOT reverted.
+
+8/21/2026 - Released ESProFile emulator firmware version 1.5, which improves SD card access speeds by a factor of about 5 on average.

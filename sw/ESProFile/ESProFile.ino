@@ -26,6 +26,7 @@ void setup(){
   pinMode(red_led, OUTPUT); // Set the red LED to an output
   pinMode(green_led, OUTPUT); // And the green LED too
   Serial.begin(115200); // Start serial comms
+  Serial.setTxTimeoutMs(0); // Make sure that serial doesn't block if nothing is reading from the other end
   clearScreen(); // Clear the screen
   setLEDColor(1, 0); // Make the LED red to show that ESProFile is initializing
   if(switchState == 1){ // If the switch is in the diagnostic position, boot into diagnostic mode
