@@ -4,18 +4,32 @@
 //* Email address: alexelectronicsguy@gmail.com                                     *
 //***********************************************************************************
 #define APPLE_III_ONLY 1
+#define USE_LEDS 1 // If I turn these off time of directory list is 16.5 seconds, on it is 8.5 seconds
 // ******** Changelog ********
 // 2/12/2025 - v1.1 - Fixed an issue where printing debug information over serial would sometimes cause read errors when using ESProFile under LOS 3.0 with a 2-port parallel card.
 // 2/22/2025 - v1.2 - Improved performance by about 30% (including during Selector copy operations) by making some tweaks to the SPI initialization routines, copy buffer size, and inlining some functions.
 // 11/14/2025 - v1.3 - Fixed a bug where ESProFile wouldn't respond in time to satisfy the super-short timeout period of Rev. C and earlier Lisa boot ROMs, as well as a bug where a botched LOS 1.0 shutdown under the Rev. C ROMs would lead to an Error 85 on the next boot attempt.
 // 4/19/2026 - v1.4 - Added support for pin definition header files to allow easy customization of ESProFile for different board layouts, and used this to create the LisaFPGA variant of ESProFile. Also cached the ProFile read/write routines to make them fast enough for LisaFPGA's 75MHz DOTCK mode.
 // 8/21/2026 - v1.5 - Improved SD card access speeds by a factor of about 5 on average with the DUSE_SPI_ARRAY_TRANSFER build option.
+// 9/29/2026 - v1.6 - Works now on the Apple /// and the "Apple ///"" and with the "Titan /// Plus IIe" if you build with APPLE_III_ONLY set to 1.
 
-#define EMULATOR_VERSION "1.5" // The version of the ESProFile emulator software; this gets printed over serial at startup
+// TODO: Test with the Apple /// Softcard
+// TODO: Add the four bytes at the beginning in it's own method. Is this needed, no but including the bytes with the read data seems wrong somehow.
+
+// Let's get one thing out of the way. If you are looking at the code and see indented #if <value> statements and are wondering why they are not all
+// the way to the left then let me explain.  The Arduino IDE at the point of writing this program has, what I would call, two weird bugs.
+// 1) When opening and closing blocks the #if <value> are considered the end of the block if the #if <value> is all the way to the left.  This causes
+//    the open and closing of sections of code to be wrong and you cannot close a block, for instance a while block, fully if there is a #if <value>
+//    within the while block and the #if <value> is all the way to the left.
+// 2) This bug is not a reason for the #if <value> statements to be to the right but it is what I still consider a bug.  Most other editors when
+//    those editors see an "#if 0" know to grey out that section.  No clue why this IDE editor does not do that.  Kind of obnoxious.
+// Alex, if you want to remove this block of comments then go right ahead. I am fine with that but wanted you to know why I used indented #if <value> statements.
+
+#define EMULATOR_VERSION "1.6" // The version of the ESProFile emulator software; this gets printed over serial at startup
 
 const size_t READ_STATUS_OFFSET = 4; // Status bytes are bytes 0-3 of blockData during a read
 const size_t PROFILE_BLOCK_SIZE = 532;
-const size_t BLOCKDATA_SIZE = 536;
+const size_t BLOCKDATA_SIZE = 536; // Four status bytes plus the profile block size for max.
 const size_t APPLE_III_WRITE_SIZE = 512; // Apple /// only handles 512 bytes of the Profile drive block
 const size_t COMMAND_BUFFER_SIZE = 6;
 const size_t STATUS_BUFFER_SIZE = 4;
@@ -36,7 +50,7 @@ SPIClass SD_SPI(HSPI); // These two lines make sure that we use hardware SPI at 
 uint8_t blockData[BLOCKDATA_SIZE]; // The ProFile block that we're currently reading/writing, with status bytes too
 uint8_t commandBuffer[COMMAND_BUFFER_SIZE] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; // The 6-byte command that the ProFile is currently executing
 uint8_t checkBytesBuffer[CHECK_BYTE_BUFFER_SIZE] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; // The 6-byte returned after a write.
-uint8_t statusBuffer[STATUS_BUFFER_SIZE] = {0x00, 0x00, 0x00, 0x00}; // The 6-byte returned after a write.
+uint8_t statusBuffer[STATUS_BUFFER_SIZE] = {0x00, 0x00, 0x00, 0x00};
 // The contents of the ProFile spare table
 uint8_t spareTable[PROFILE_SPARE_TABLE_SIZE] = {0x50, 0x52, 0x4F, 0x46, 0x49, 0x4C, 0x45, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0x03, 0x98, 0x00, 0x26, 0x00, 0x02, 0x14, 0x20, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x43, 0x61, 0x6D, 0x65, 0x6F, 0x2F, 0x41, 0x70, 0x68, 0x69, 0x64, 0x20, 0x30, 0x30, 0x30, 0x31}; //the array that holds the spare table
 bool parityArray[256] = {0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0}; // A lookup table for parity bits
@@ -44,7 +58,6 @@ bool parityArray[256] = {0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0
 uint32_t blockNum; // The block that the current operation is being performed on
 
 uint16_t bufferIndex = 0; // Index into blockData and commandBuffer used during rapid comms with the Lisa
-uint16_t bufferIndexOverflow = 0; // TODO: Gary, get rid of this after testing. 
 uint16_t checkBytesIndex = 0; // Index into the checkBytesBuffer
 uint16_t statusBufferIndex = 0; // Index into the statusBuffer
 
@@ -111,8 +124,13 @@ void emulatorLoop() {
   while(readCMD() == 1); // Wait for CMD to go low (the start of a ProFile handshake)
   setParallelDir(1); // Set the ProFile bus to output mode
   //delayMicroseconds(1);
+ 
+  // When transfering bytes over a connection the parity should always be sent after the data settles.
+  // This means that the data should be latched (or settles) and the parity should be sent.
+  // This allows for the data to be retrieved first and then for the parity to be calculated and read and compared after that.
   sendData(0x01); // Send an 0x01 to the host
   sendParity(0x01); // And the appropriate parity bit for that value
+
   setBSY(); // And lower BSY to acknowledge our presence
   currentTime = 0;
   while(readCMD() == 0){ // Wait for the host to raise CMD in response, and timeout if it doesn't do this in time
@@ -165,13 +183,17 @@ void emulatorLoop() {
   }
   #if APPLE_III_ONLY
   // Apple /// driver source says: DUMMY HANDSHAKE FOR PROFILE TO UPDATE
+  // Is this needed to be different from below? No.
+  // Just treating it differently because the driver does.
   else if(commandBuffer[0] == 0xFF){
     printCommand(); // Print the command that we didn't understand
     setParallelDir(1); // Set the bus to output mode
     //delayMicroseconds(1);
+
     // Apple /// does like to have a 0x01 returned on the 0xFF command.
-    sendData(0x01); // Put an invalid value on the bus to show that we didn't understand the command TODO: Gary, why 0x01?
+    sendData(0x01); // Put an invalid value on the bus to show that we didn't understand the command
     sendParity(0x01); // And the appropriate parity bit for that value
+
     setBSY(); // And tell the host that it's there 
   }
   #endif
@@ -190,38 +212,28 @@ void emulatorLoop() {
 // We stick it in IRAM (and thus make it a separate function) to speed it up and avoid cache misses that would happen otherwise
 // That wouldn't normally be a problem, but when LisaFPGA is running at 75MHz, timings are tight enough that cache misses break things
 // The symptom is that the very first read op doesn't work, but subsequent ones do once this code is cached into IRAM
-IRAM_ATTR void sendStatusBytes() {
-  bufferIndexOverflow = 0;
-  // TODO: Need to set what currentState is supposed to be.
+IRAM_ATTR void sendWriteStatusBytes() {
+  prevState = 1;
   while(bitRead(REG_READ(CMD_IN_REG), CMDPin) == 1 && bitRead(REG_READ(PRES_IN_REG), PRESPin) == 1){ // Stay in the data-sending loop until the host lowers CMD or the drive is reset
     currentState = bitRead(REG_READ(STRB_IN_REG), STRBPin); // Read the current state of STRB
     if(currentState == 0 and prevState == 1){ // If we see a falling edge on STRB, send the next byte
       // STATUS_DATA_SIZE for this method is the max. Don't keep putting out more just wait for CMD to go down.
       if (statusBufferIndex < STATUS_BUFFER_SIZE)
       {
-        // TODO: Gary, I moved this so that it is similar to the rest with sendParity after the write.
-        #if !APPLE_III_ONLY
-        sendParity(statusBuffer[statusBufferIndex]); // Send the parity for the byte
-        REG_WRITE(BUS_W1TS_REG, statusBuffer[statusBufferIndex] << busOffset); // Then write the byte into W1TS to set all the bits that need to be set
-        REG_WRITE(BUS_W1TC_REG, ((byte)~statusBuffer[statusBufferIndex++] << busOffset)); // Then write the inverse of the byte into W1TC to clear all the bits that need to be cleared, and increment the buffer index
-        #else
         REG_WRITE(BUS_W1TS_REG, statusBuffer[statusBufferIndex] << busOffset); // Then write the byte into W1TS to set all the bits that need to be set
         REG_WRITE(BUS_W1TC_REG, ((byte)~statusBuffer[statusBufferIndex] << busOffset)); // Then write the inverse of the byte into W1TC to clear all the bits that need to be cleared, and increment the buffer index
+        // When transfering bytes over a connection the parity should always be sent after the data settles.
+        // This means that the data should be latched (or settles) and the parity should be sent.
+        // This allows for the data to be retrieved first and then for the parity to be calculated and read and compared after that.
         sendParity(statusBuffer[statusBufferIndex++]); // Send the parity for the byte
-        #endif
-      } else {
-        bufferIndexOverflow++;
       }
     }
     prevState = currentState; // Update the previous state of STRB
   }
 }
 
-// TODO: Set the prevState correctly for each method.  Some are supposed to be high first,
-//       Some are to be low start. So prevState should be set correctly.
 IRAM_ATTR void sendMultiData() {
-  bufferIndexOverflow = 0;
-  //prevState = 0; // Set starting state of zero did not work. TODO: try = 1 later. Right now we are hoping the last read set it at the correct value.
+  prevState = 1;
   while(bitRead(REG_READ(CMD_IN_REG), CMDPin) == 1 && bitRead(REG_READ(PRES_IN_REG), PRESPin) == 1){ // Stay in the data-sending loop until the host lowers CMD or the drive is reset
     currentState = bitRead(REG_READ(STRB_IN_REG), STRBPin); // Read the current state of STRB
     if(currentState == 1 and prevState == 0){ // If we see a rising edge on STRB, send the next byte
@@ -235,14 +247,14 @@ IRAM_ATTR void sendMultiData() {
       // Sometimes it was a pretty bad overflow of many bytes.
       // I think we should be putting some buffer overflow check bytes for
       // both sections of code and checking those sacrificial bytes randomly.
-      if (bufferIndex < (APPLE_III_WRITE_SIZE+READ_STATUS_OFFSET))
+      if (bufferIndex < (APPLE_III_WRITE_SIZE+READ_STATUS_OFFSET+CHECK_BYTE_BUFFER_SIZE))
       {
-        // TODO: Gary, I moved this so that it is similar to the rest with sendParity after the write.
         REG_WRITE(BUS_W1TS_REG, blockData[bufferIndex] << busOffset); // Then write the byte into W1TS to set all the bits that need to be set
         REG_WRITE(BUS_W1TC_REG, ((byte)~blockData[bufferIndex] << busOffset)); // Then write the inverse of the byte into W1TC to clear all the bits that need to be cleared, and increment the buffer index
+        // When transfering bytes over a connection the parity should always be sent after the data settles.
+        // This means that the data should be latched (or settles) and the parity should be sent.
+        // This allows for the data to be retrieved first and then for the parity to be calculated and read and compared after that.
         sendParity(blockData[bufferIndex++]); // Send the parity for the byte
-      } else {
-        bufferIndexOverflow++;
       }
       #endif
     }
@@ -252,7 +264,7 @@ IRAM_ATTR void sendMultiData() {
 
 // This function receives bytes from the host to form the command buffer, and is in IRAM for the same reason as sendMultiData
 IRAM_ATTR void receiveCommand() {
-  //prevState = 1; // Set starting state.
+  prevState = 1; // Set starting state.
   while(bitRead(REG_READ(CMD_IN_REG), CMDPin) == 1 && bitRead(REG_READ(PRES_IN_REG), PRESPin) == 1){ // Stay in the command-reception loop until the host lowers CMD or the drive is reset
     currentState = bitRead(REG_READ(STRB_IN_REG), STRBPin); // Read the current state of STRB
     if(currentState == 0 and prevState == 1){ // If we see a falling edge on STRB, read the bus and store the data in the command buffer
@@ -265,16 +277,15 @@ IRAM_ATTR void receiveCommand() {
 
 #if APPLE_III_ONLY
 // This function receives bytes from the host to form the write command check bytes, and is in IRAM for the same reason as sendMultiData
+// Apple /// sends four bytes, Titan Apple /// Apple IIe plus card sends only three (or maybe it is ProDOS?).
+// Either way CMD goes down when finished. The real Profile drive does not seem to care either way.
 IRAM_ATTR void receiveCheckBytes() {
   checkBytesIndex = 0; // Always start out at zero.
   prevState = 0; // Set the correct starting position.
-
   // Need to read the bytes as fast as possible and this will just slow things down.
-  while(bitRead(REG_READ(CMD_IN_REG), CMDPin) == 0);
-
-  while (checkBytesIndex < 6) {
+  while(bitRead(REG_READ(CMD_IN_REG), CMDPin) == 1 && bitRead(REG_READ(PRES_IN_REG), PRESPin) == 1){ // Stay in the command-reception loop until the host lowers CMD or the drive is reset
     currentState = bitRead(REG_READ(STRB_IN_REG), STRBPin); // Read the current state of STRB
-    if(currentState == 0 and prevState == 1){ // If we see a falling edge on STRB, read the bus and store the data in the command buffer
+    if((currentState == 0) && (prevState == 1) && (checkBytesIndex < 6)){ // If we see a falling edge on STRB, read the bus and store the data in the command buffer
       checkBytesBuffer[checkBytesIndex] = REG_READ(BUS_IN_REG) >> busOffset;
       sendParity(checkBytesBuffer[checkBytesIndex++]); // Send the parity bit out for that byte, and increment bufferIndex to the next spot in the buffer
     }
@@ -285,16 +296,21 @@ IRAM_ATTR void receiveCheckBytes() {
 
 // Another byte-receiving function, also in IRAM, but this one is for receiving data during a write command
 IRAM_ATTR void receiveMultiData() {
+  prevState=1;
+  bufferIndex = 0; // Reset the blockData buffer index.
+
   #if !APPLE_III_ONLY
- // Make sure there are correct values of CMD and PRES pins
+  // Make sure there are correct values of CMD and PRES pins
   while(bitRead(REG_READ(CMD_IN_REG), CMDPin) == 1 && bitRead(REG_READ(PRES_IN_REG), PRESPin) == 1){
   #else
   // On the Apple /// just stop and wait for CMD to be raised.  If it already is then just continue. We know why we got here.
+  // This does have a possible problem with the CMDPin not being checked.  It could cause things to go out of sync.
   while(bitRead(REG_READ(CMD_IN_REG), CMDPin) == 0);
 
-  bufferIndex = 0; // Reset the blockData buffer index. We always do 512 on Apple ///
-  prevState=1; // Set the correct starting position. 
-  // Make it much faster so that we get it really quick.
+  // What this does cause is to have the CMD pin not be checked which speeds up the writing from the host.
+  // If you do not do this it causes delays.
+  // TODO: In the future when everything is working correctly maybe try to go back to the above but I have tried that twice so far and each try has failed.
+  // Make it much faster so that we get it really quick and CMD and Resets.
   while (bufferIndex < APPLE_III_WRITE_SIZE) {
   #endif
     currentState = bitRead(REG_READ(STRB_IN_REG), STRBPin); // Read the current state of STRB
@@ -307,12 +323,20 @@ IRAM_ATTR void receiveMultiData() {
 
   #if APPLE_III_ONLY
   // Apple /// only sends 512 and then it sends six check bytes.
-  // Those check bytes are sent differently.
+  // Those check bytes are sent slightly differently.
   receiveCheckBytes();
   #endif
 }
 
+// ****************************************************************************************
+// I made this header so big because I kept not being able to find it when scrolling down.
+//
+//
 // Process and execute a read command
+//
+//
+// This is a pretty important header block.
+// ****************************************************************************************
 void readDrive(){
   setParallelDir(1); // Set the bus to output mode
   //delayMicroseconds(1);
@@ -706,10 +730,35 @@ void readDrive(){
     }
   }
   // If we end up here, then our command isn't a Selector command; it's just a good old-fashioned read
+  #if 1
+  else if((blockNum*PROFILE_BLOCK_SIZE) < disk.fileSize()){ // Check that the block number is within the range of the disk image
+  #else
   else if(blockNum < disk.fileSize()){ // Check that the block number is within the range of the disk image
+  #endif
+    uint8_t blockHigh = (blockNum >> 8 & 0xFF);
+    uint8_t blockLow = blockNum & 0xFF;
+
     blockNum *= PROFILE_BLOCK_SIZE;
     disk.seekSet(blockNum); // Seek to our block
     disk.read(blockData+READ_STATUS_OFFSET, PROFILE_BLOCK_SIZE); // And read the block into the block data buffer
+    #if APPLE_III_ONLY
+    // This is not really for the Apple /// but for the Titan /// Plus IIe.
+    // The Titan /// Plus IIe fails if the correct values are not sent.
+    // In fact, it stops after the first three bytes are sent if they are not correct.
+    // Then even if the first three bytes come back fine the Titan /// Plus IIe fails
+    // and stops after the fourth byte if it does not see the 0xFF.
+    // It will continue if it sees the 0xFF and will finally read all six but will still
+    // fail the whole transaction if the last two are not correct.
+    // Weird that the true Apple /// does not care. I even checked the driver and unless
+    // I read the driver code for the Apple /// wrong it does not care.
+    // Can't hurt to do it like the Profile drive does it for everyone.
+    blockData[READ_STATUS_OFFSET+APPLE_III_WRITE_SIZE] = 0x00;
+    blockData[READ_STATUS_OFFSET+APPLE_III_WRITE_SIZE+1] = blockHigh;
+    blockData[READ_STATUS_OFFSET+APPLE_III_WRITE_SIZE+2] = blockLow;
+    blockData[READ_STATUS_OFFSET+APPLE_III_WRITE_SIZE+3] = 0xFF;
+    blockData[READ_STATUS_OFFSET+APPLE_III_WRITE_SIZE+4] = 0xFF - blockHigh;
+    blockData[READ_STATUS_OFFSET+APPLE_III_WRITE_SIZE+5] = 0xFF - blockLow;
+    #endif
   }
   // Otherwise, if the block is outside the range of the disk image, fill the block data buffer with zeros
   else{
@@ -724,41 +773,45 @@ void readDrive(){
     blockData[i] = 0x00;
   }
   bufferIndex = 0; // Reset the blockData buffer index
-  #if !APPLE_III_ONLY
-  sendParity(blockData[bufferIndex]); // Put the parity for the first byte on the bus
-  sendData(blockData[bufferIndex++]); // Followed by the byte itself, and increment the buffer index
-  #else
+
+  // When transfering bytes over a connection the parity should always be sent after the data settles.
+  // This means that the data should be latched (or settles) and the parity should be sent.
+  // This allows for the data to be retrieved first and then for the parity to be calculated and read and compared after that.
   sendData(blockData[bufferIndex]); // Followed by the byte itself, and increment the buffer index
   sendParity(blockData[bufferIndex++]); // Put the parity for the first byte on the bus
-  #endif
+
   clearBSY(); // And raise BSY to tell the host that we're ready
 
   sendMultiData(); // Now send the rest of the block data, with the appropriate parity bits for each byte
 
-  Serial.print("1: BufferIndex = "); Serial.print(bufferIndex); Serial.println(".");
+  Serial.println();
+ }
 
-  if(bufferIndexOverflow != 0){
-    Serial.print("1: BufferIndexOverflow = "); Serial.print(bufferIndexOverflow); Serial.println(".");
-    // What to do?
-  }
-}
-
+// ****************************************************************************************
+// I made this header so big because I kept not being able to find it when scrolling down.
+//
+//
 // Process and execute a write command
+//
+//
+// This is a pretty important header block.
+// ****************************************************************************************
 void writeDrive(){
   uint8_t response;
-  bool skipFinalStatus = false;
 
-  //
   //
   // Handshake for write with host to say we got the command.
   //
-  //
   setParallelDir(1); // Set the bus to output mode
   //delayMicroseconds(1);
+
   sendData(commandBuffer[0] + 0x02); // Acknowledge the write command by sending the command value + 2
   sendParity(commandBuffer[0] + 0x02); // And the appropriate parity for that value
+  
   setBSY(); // And lower BSY to tell the host that we've acknowledged the command
+  
   printCommand(); // Now that we're in control of the pace of the bus, print the command that we're executing
+  
   currentTime = 0;
   while(readCMD() == 0){ // Wait for the host to raise CMD and timeout if it doesn't
     currentTime++;
@@ -784,10 +837,6 @@ void writeDrive(){
       return;
     }
   }
-
-  #if !APPLE_III_ONLY
-  bufferIndex = 0; // Reset the blockData buffer index
-  #endif
 
   // Don't forget to send parity no matter what value is returned. As long as we did not timeout.
   // This used to be a problem in the code on the Apple ///.
@@ -820,11 +869,13 @@ void writeDrive(){
   // Send back that we completed the write, whatever it was.
   //
   //
-  // On the Apple ///
+  // On the Apple ///:
   // I could not find a way to know if there was a parity error. If there was then we should
   // be sending back 01 and/or just retrying.
-  // If we were able to figure out if there was a parity error then we sould just return.
+  // If we were able to figure out if there was a parity error then we should just return.
   // Hopefully, cross your fingers, not a parity error...
+  // Of course, if there was a parity error the retry will come in instead and then we
+  // will leave because the 0x06 will fail with an AA.
   #endif
 
   setParallelDir(1); // Set the bus to output mode
@@ -836,6 +887,8 @@ void writeDrive(){
   #if !APPLE_III_ONLY
   setBSY(); // And lower BSY to tell the host about our acknowledgement
   #else
+  // TODO: maybe try again with the LED being turned on/off?  Maybe something else was wrong and we can remove this?
+  // During the time this was put in the LED was causing a very long delay and the Apple /// was not getting data correctly.
   setBSYLow(); // And lower BSY to tell the host about our acknowledgement
   #endif
 
@@ -843,18 +896,13 @@ void writeDrive(){
   while(readCMD() == 0){ // Wait for the host to raise CMD and timeout if it doesn't
     currentTime++;
     if(currentTime >= timeout){
-      // Serial.println("Timeout: Write Command Second Handshake Part 2");
+      Serial.println("Timeout: Write Command Second Handshake Part 2");
       return;
     }
   }
 
   setParallelDir(0); // Set the bus to input mode
   //delayMicroseconds(1);
-
-  #if APPLE_III_ONLY
-  // The Apple /// wants this. Not sure why others do not?
-  setBSYHigh(); // Raise BSY to tell the host that we're ready to receive the data
-  #endif
 
   currentTime = 0;
   while(((response = receiveData()) != 0x55) && (response != 0xAA)){ // And wait for the host to respond with an 0x55 or 0xAA; timeout if it doesn't
@@ -879,6 +927,7 @@ void writeDrive(){
   }
 
   // Host returned 0x55 so we are good. Continue!
+  // TODO: Shouldn't I check the status bytes?  Seems like I can to make sure I am okay.
 
   bool halt = false; // This flag will be set if the host wants to halt the emulator
   blockNum = (commandBuffer[1] << 16 | commandBuffer[2] << 8 | commandBuffer[3]); // Form a block number from bytes 1-3 of the command buffer
@@ -1158,18 +1207,15 @@ void writeDrive(){
     }
   }
   // If we end up here, then the command is just a good old-fashioned write
-  else if(blockNum < disk.fileSize()){ // So check that the block number is within the range of the disk image
+  #if 1
+  else if((blockNum*PROFILE_BLOCK_SIZE) < disk.fileSize()){ // Check that the block number is within the range of the disk image
+  #else
+  else if(blockNum < disk.fileSize()){ // Check that the block number is within the range of the disk image
+  #endif
     blockNum *= PROFILE_BLOCK_SIZE;
-
-    #if APPLE_III_ONLY
-    // The apple /// wants this as soon as possible. We cannot wait for the write.
-    // If you wait for the write below the apple /// driver will think it has to retry.
-    sendStatus(false);
-    // We already sent status. Just return.
-    skipFinalStatus = true;
-    #endif
-
+    
     disk.seekSet(blockNum); // Seek to the block location in the disk image by byte location.
+
     // Write the block data into the disk image at the location specified
     #if !APPLE_III_ONLY
     // For the Apple Lisa
@@ -1177,8 +1223,16 @@ void writeDrive(){
     #else
     // For the Apple ///
     disk.write(blockData, APPLE_III_WRITE_SIZE); // Warning! Apple /// only does 512 bytes!!!!
+    // The weird thing about this change is that I never saw the actual Profile drive ever send
+    // over 536 bytes.  Maybe mine is different? I have no clue.  I do not have an Apple Lisa to
+    // to check and see if there is some way the drive knows it is talking differently.  I do
+    // know from all my logic probing that for the Apple /// my Profile drive only sends 512.
+    // (Plus the four at the beginning and the six status at the end.)
+    // I have seen online logic probe outputs that show the full 536 but not in any of mine.
     #endif
-    disk.flush(); // And flush the disk image to make sure the write is complete    
+
+    disk.flush(); // And flush the disk image to make sure the write is complete
+
     Serial.println();
   }
   // If the block is outside the range of the disk image, print an error message
@@ -1186,50 +1240,36 @@ void writeDrive(){
     Serial.println(" - Error: Requested block is out of range!");
   }
 
-  #if !APPLE_III_ONLY
-  sendStatus(true);
-  #endif
+  sendWriteStatus();
 
   if(halt == true){ // If we set the halt flag earlier, then we need to halt the ESProFile here
     while(1);
   }
-  // TODO: Is this needed? Gary I put this here. setParallelDir(0); // Now set the bus to input mode
 }
 
 //
 // Send Status!!!
 //
-void sendStatus(bool useBusy){
+void sendWriteStatus()
+{
   setParallelDir(1); // Now set the bus to output mode
   //delayMicroseconds(1);
 
-  // Fill the four status bytes in blockData with zeros (no errors)
-  for(int i = 0; i < STATUS_BUFFER_SIZE; i++){
+  for(int i=0;i < STATUS_BUFFER_SIZE;i++){
     statusBuffer[i] = 0x00;
   }
 
   statusBufferIndex = 0; // Set the buffer index to the first status byte
 
-  #if !APPLE_III_ONLY
-  sendParity(statusBuffer[statusBufferIndex]); // Put its parity info on the PARITY line
-  sendData(statusBuffer[statusBufferIndex++]); // And put the status byte on the bus, incrementing the buffer index afterwards
-  #else
+  // When transfering bytes over a connection the parity should always be sent after the data settles.
+  // This means that the data should be latched (or settles) and the parity should be sent.
+  // This allows for the data to be retrieved first and then for the parity to be calculated and read and compared after that.
   sendData(statusBuffer[statusBufferIndex]); // And put the status byte on the bus, incrementing the buffer index afterwards
   sendParity(statusBuffer[statusBufferIndex++]); // Put its parity info on the PARITY line
-  #endif
 
-  if (useBusy){
     clearBSY(); // Raise BSY to tell the host that we're ready to continue
-  }
-
-  // This method only sends status. not sure why it is not called send status and all the other code above moved into it.
-  sendStatusBytes(); // Now send the rest of the status bytes, with the appropriate parity for each byte
-
-  Serial.print("2: StatusBufferIndex = "); Serial.print(statusBufferIndex); Serial.println(".");
-  if(bufferIndexOverflow != 0){
-    Serial.print("2: BufferIndexOverflow = "); Serial.println(bufferIndexOverflow); Serial.println(".");
-    // What to do?
-  }
+  // Now send the rest of the status bytes, with the appropriate parity for each byte
+  sendWriteStatusBytes();
 }
 
 // Prints whatever command the drive is currently executing
@@ -1356,12 +1396,16 @@ void updateSpareTable(){
 // All of these functions just make it easier to set, clear, and read the control signals for the drive
 // Remember, all signals are active low
 inline __attribute__((__always_inline__)) void setBSY(){
+  #if USE_LEDS
   setLEDColor(0, 0); // Setting BSY is special because it also turns off the LEDs
+  #endif
   REG_WRITE(BSY_W1TC_REG, 0b1 << BSYPin); // In addition to setting BSY low
 }
 
 inline __attribute__((__always_inline__)) void clearBSY(){
+  #if USE_LEDS
   setLEDColor(0, 1); // Same for clearing BSY; we have to turn the green LED on
+  #endif
   REG_WRITE(BSY_W1TS_REG, 0b1 << BSYPin); // As well as setting BSY high
 }
 
