@@ -1,25 +1,27 @@
 //***********************************************************************************
-//* ESProFile ProFile Emulator Software v1.5                                        *
+//* ESProFile ProFile Emulator Software v1.6                                        *
 //* By: Alex Anderson-McLeod                                                        *
 //* Email address: alexelectronicsguy@gmail.com                                     *
 //***********************************************************************************
 #define APPLE_III_ONLY 1
-#define USE_LEDS 1 // If I turn these off time of directory list is 16.5 seconds, on it is 8.5 seconds
+#define USE_LEDS 1 // If I turn these off time of directory list is 16.5 seconds, on it is 8.5 seconds. Using the LEDs make it faster.
 // ******** Changelog ********
 // 2/12/2025 - v1.1 - Fixed an issue where printing debug information over serial would sometimes cause read errors when using ESProFile under LOS 3.0 with a 2-port parallel card.
 // 2/22/2025 - v1.2 - Improved performance by about 30% (including during Selector copy operations) by making some tweaks to the SPI initialization routines, copy buffer size, and inlining some functions.
 // 11/14/2025 - v1.3 - Fixed a bug where ESProFile wouldn't respond in time to satisfy the super-short timeout period of Rev. C and earlier Lisa boot ROMs, as well as a bug where a botched LOS 1.0 shutdown under the Rev. C ROMs would lead to an Error 85 on the next boot attempt.
 // 4/19/2026 - v1.4 - Added support for pin definition header files to allow easy customization of ESProFile for different board layouts, and used this to create the LisaFPGA variant of ESProFile. Also cached the ProFile read/write routines to make them fast enough for LisaFPGA's 75MHz DOTCK mode.
 // 8/21/2026 - v1.5 - Improved SD card access speeds by a factor of about 5 on average with the DUSE_SPI_ARRAY_TRANSFER build option.
-// 9/29/2026 - v1.6 - Works now on the Apple /// and the "Apple ///"" and with the "Titan /// Plus IIe" if you build with APPLE_III_ONLY set to 1.
+// 9/29/2026 - v1.6 - Works now on the "Apple ///" and with the "Titan /// Plus IIe" and "SoftCard ///" if you build with APPLE_III_ONLY set to 1.
+//                    Tested with the three types of .profile drivers I could find. .prof[#], .profile, and .cpm[#] on the Apple ///. (* Gary Desrochers *)
 
-// TODO: Test with the Apple /// Softcard
-// TODO: Add the four bytes at the beginning in it's own method. Is this needed, no but including the bytes with the read data seems wrong somehow.
+// TODO: Add the four bytes at the beginning in it's own method. Is this needed, no but including the bytes with the read data seems wrong somehow. Doing
+//       so would also clean up the multitude of READ_STATUS_OFFSET used all over. I know, the compiler takes care of those but why make the coding harder.
+// TODO: Need to go through timings more.  Some things should be taking longer to be closer cycle correct and other things are taking too long.
 
 // Let's get one thing out of the way. If you are looking at the code and see indented #if <value> statements and are wondering why they are not all
 // the way to the left then let me explain.  The Arduino IDE at the point of writing this program has, what I would call, two weird bugs.
 // 1) When opening and closing blocks the #if <value> are considered the end of the block if the #if <value> is all the way to the left.  This causes
-//    the open and closing of sections of code to be wrong and you cannot close a block, for instance a while block, fully if there is a #if <value>
+//    the open and closing of sections of code to be wrong and you cannot close a block fully, for instance a while block, if there is a #if <value>
 //    within the while block and the #if <value> is all the way to the left.
 // 2) This bug is not a reason for the #if <value> statements to be to the right but it is what I still consider a bug.  Most other editors when
 //    those editors see an "#if 0" know to grey out that section.  No clue why this IDE editor does not do that.  Kind of obnoxious.
